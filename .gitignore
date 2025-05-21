@@ -1,5 +1,3 @@
 __pycache__/
-logs/*
-!logs/.gitkeep
-data/*
-!logs/.gitkeep
+/logs
+/data
