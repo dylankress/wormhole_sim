@@ -11,10 +11,12 @@ from sim_clock import SimClock
 from file_uploader import FileUploader
 from node_generator import generate_nodes
 from bootstrap_server import BootstrapServer
+from blackout_manager import BlackoutManager
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Run Wormhole simulation.")
     parser.add_argument("--seed", type=int, help="use seed to generate a repeatable simulation outcome")
+    parser.add_argument("--blackout", action="store_true", help="enable a regional blackout scenario after day 1")
     return parser.parse_args()
 
 def save_seed(seed: int, output_dir: str = "logs/seeds"):
@@ -36,6 +38,11 @@ def main():
 
     node_rng = config.child_rng("nodes")
     nodes = generate_nodes(node_rng, config.total_nodes, config)
+    
+    blackout_manager = None
+    if args.blackout:
+        blackout_manager = BlackoutManager(config, nodes)
+    
     bootstrap_server = BootstrapServer(config)
 
     # Set last tick status for all nodes
@@ -53,13 +60,16 @@ def main():
             for profile, weight in config.behavior_distribution.items():
                 print(f"  - {profile:15s}: {weight*100:.1f}%")
 
+        if blackout_manager:
+            blackout_manager.apply_blackout(current_tick)
+
         for node in nodes:
-            node.online = node.behavior_profile.is_online(current_tick)
+            node.online = node.behavior_profile.is_online(current_tick, node)
             came_online = node.online and not node.was_online_last_tick
             went_offline = not node.online and node.was_online_last_tick
 
             if came_online:
-                print(f"[JOIN EVENT] {node.id} online at tick {current_tick}, joined={node.has_joined}, peers={len(node.known_peers)}")
+                #print(f"[JOIN EVENT] {node.id} online at tick {current_tick}, joined={node.has_joined}, peers={len(node.known_peers)}")
                 if not node.has_joined:
                     node.attempt_join(bootstrap_server, current_tick)
                     node.last_bootstrap_tick = current_tick
@@ -70,8 +80,8 @@ def main():
                         node.attempt_join(bootstrap_server, current_tick)
                         node.last_bootstrap_tick = current_tick
 
-            if went_offline:
-                print(f"[OFFLINE EVENT] {node.id} went offline at tick {current_tick}")
+            #if went_offline:
+            #    print(f"[OFFLINE EVENT] {node.id} went offline at tick {current_tick}")
 
             node.was_online_last_tick = node.online
 
@@ -91,12 +101,22 @@ def main():
         for tick, count in connected_counts:
             writer.writerow([tick, count])
 
+    # Load the logged data
     df = pd.read_csv("logs/connected_counts.csv")
-    plt.plot(df["tick"], df["connected_nodes"])
+
+    # Calculate a smoothed line (rolling average)
+    df["smoothed"] = df["connected_nodes"].rolling(window=100, min_periods=1).mean()
+
+    # Plot both raw and smoothed data
+    plt.plot(df["tick"], df["connected_nodes"], alpha=0.3, label="Raw Data", linewidth=0.5)
+    plt.plot(df["tick"], df["smoothed"], label="Smoothed (100 tick avg)", linewidth=1.5)
+
+    # Labels and formatting
     plt.xlabel("Tick")
     plt.ylabel("Connected Nodes")
     plt.title("Connected Node Count Over Time")
     plt.grid(True)
+    plt.legend()
     plt.tight_layout()
     plt.show()
 

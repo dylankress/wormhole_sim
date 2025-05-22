@@ -13,17 +13,18 @@ class RollingBehaviorProfile(BaseBehaviorProfile):
         self.offset = offset
 
     def is_online(self, tick, node=None):
+        # Force blackout override
+        if node and getattr(node, "force_offline_until", None):
+            if tick < node.force_offline_until:
+                return False
+
+        # Normal behavior logic
         cycle_position = (tick + self.offset) % self.cycle_length
         base_online = cycle_position < self.uptime_ticks
 
         if node and node.timezone_offset is not None:
-            # Determine local time of day (0–86400)
             local_time = (tick + node.timezone_offset) % 86400
-
-            # Sinusoidal curve peaks at 14:00 (2 PM), trough at 2 AM
             daylight_curve = 0.5 + 0.5 * math.sin(2 * math.pi * (local_time - 6 * 3600) / 86400)
-
-            # Deterministic RNG modulated by curve
             rng = node.config.child_rng(f"daylight_curve_{node.id}_{tick}")
             return base_online and rng.random() < daylight_curve
 

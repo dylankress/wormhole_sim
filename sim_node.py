@@ -18,6 +18,8 @@ class SimNode:
         self.last_bootstrap_tick = None
         self.was_online_last_tick = False
 
+        self.force_offline_until = None  # Used by blackout_manager to override uptime
+
         self.auth_secret = "default"
         self.password_seed = "default"
 
@@ -31,7 +33,8 @@ class SimNode:
                 f"online={self.online} "
                 f"upload_speed={self.upload_speed_mb_s}MB/s "
                 f"peers={len(self.known_peers)} "
-                f"free={self.free_space_gb}GB>")
+                f"free={self.free_space_gb}GB "
+                f"blackout={self.force_offline_until is not None}>")
     
     def attempt_join(self, bootstrap_server, current_tick):
         # Simulate announcement delay
@@ -50,6 +53,6 @@ class SimNode:
         self.known_peers.update(known_peers)
         self.has_joined = True
 
-        if current_tick > 0:
-            print(f"🛰 Tick {current_tick}: node {self.id} joined the network")
-            print(f"Tick {current_tick:.2f}: node {self.id} is now online with {len(self.known_peers)} known peers")
+        #if current_tick > 0:
+            #print(f"🛰 Tick {current_tick}: node {self.id} joined the network")
+            #print(f"Tick {current_tick:.2f}: node {self.id} is now online with {len(self.known_peers)} known peers")

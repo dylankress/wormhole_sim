@@ -6,7 +6,7 @@ class SimulationConfig:
         self.seed = seed
         self.rng = random.Random(seed)
 
-        self.total_ticks = 500000
+        self.total_ticks = 10000
         self.total_nodes = 1000
         self.target_active_ratio = 0.01
 
