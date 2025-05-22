@@ -24,6 +24,8 @@ class SimNode:
         self.password_seed = "default"
 
         self.config = config
+        self.cached_rng = config.child_rng(f"node_rng_{node_id}")
+        
         self.timezone_offset = None  # Assigned in node_generator
 
         self.files_uploaded = []
@@ -42,7 +44,7 @@ class SimNode:
         upload_speed_kbps = self.upload_speed_mb_s * 1024
         delay_ticks = announce_payload_kb / upload_speed_kbps
 
-        rng = self.config.child_rng(f"join_delay_{self.id}_{current_tick}")
+        rng = self.cached_rng
         jitter = rng.uniform(0, 0.25)
         total_delay = delay_ticks + jitter
 

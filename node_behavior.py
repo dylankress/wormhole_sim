@@ -24,9 +24,8 @@ class RollingBehaviorProfile(BaseBehaviorProfile):
 
         if node and node.timezone_offset is not None:
             local_time = (tick + node.timezone_offset) % 86400
-            daylight_curve = 0.5 + 0.5 * math.sin(2 * math.pi * (local_time - 6 * 3600) / 86400)
-            rng = node.config.child_rng(f"daylight_curve_{node.id}_{tick}")
-            return base_online and rng.random() < daylight_curve
+            daylight = node.config.daylight_curve[local_time]
+            return base_online and node.cached_rng.random() < daylight
 
         return base_online
 

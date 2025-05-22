@@ -26,32 +26,40 @@ class BlackoutManager:
         region_count = sum(1 for n in nodes if n.timezone_offset == self.blackout_region)
         print(f"📊 {region_count} nodes assigned to region {self.blackout_region // 3600}h")
 
+        # Cache nodes affected by this region
+        self.affected_nodes = [n for n in self.nodes if n.timezone_offset == self.blackout_region]
+
     def apply_blackout(self, tick):
-        # Trigger blackout after number of ticks
+        if not self.blackout_triggered and tick < 1000:
+            return
+
         if not self.blackout_triggered and tick >= 1000:
             self.blackout_triggered = True
             self.blackout_active = True
             self.blackout_start_tick = tick
             self.blackout_end_tick = tick + self.blackout_duration
-            print(f"🚨 Blackout begins at tick {tick} for region {self.blackout_region // 3600}h")
 
-            for node in self.nodes:
-                if node.timezone_offset == self.blackout_region:
-                    node.force_offline_until = self.blackout_end_tick + self.ramp_duration
+            print(f"Blackout begins at tick {tick} for region {self.blackout_region // 3600}h")
 
-        # Handle ramp-up phase
-        if self.blackout_active and tick > self.blackout_end_tick:
-            elapsed = tick - self.blackout_end_tick
-            ramp_ratio = min(elapsed / self.ramp_duration, 1.0)
+            for node in self.affected_nodes:
+                node.force_offline_until = self.blackout_end_tick + self.ramp_duration
 
-            for node in self.nodes:
-                if node.timezone_offset == self.blackout_region:
-                    if hasattr(node, "force_offline_until"):
-                        # Deterministically stagger return to service
-                        node_rng = self.config.child_rng(f"ramp_{node.id}_{tick}")
-                        if node_rng.random() < ramp_ratio:
-                            node.force_offline_until = None  # fully back online
+            return
 
-            if ramp_ratio >= 1.0:
-                print(f"✅ Region {self.blackout_region // 3600}h fully recovered at tick {tick}")
-                self.blackout_active = False
+        if not self.blackout_active or tick <= self.blackout_end_tick:
+            return
+
+        elapsed = tick - self.blackout_end_tick
+        ramp_ratio = min(elapsed / self.ramp_duration, 1.0)
+
+        still_offline = [n for n in self.affected_nodes if n.force_offline_until is not None]
+        target_unlock_count = int(len(self.affected_nodes) * ramp_ratio)
+        unlock_now = still_offline[:target_unlock_count]
+
+        for node in unlock_now:
+            node.force_offline_until = None
+
+        if ramp_ratio >= 1.0:
+            print(f"Region {self.blackout_region // 3600}h fully recovered at tick {tick}")
+            self.blackout_active = False
+

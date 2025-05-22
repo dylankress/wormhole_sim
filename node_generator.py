@@ -56,8 +56,7 @@ def generate_nodes(rng, count, config):
             0.05   # UTC+21   (extremely sparse)
         ]
 
-        tz_rng = config.child_rng(f"timezone_offset_{node_id}")
-        node.timezone_offset = tz_rng.choices(timezone_buckets, weights=weights)[0]
+        node.timezone_offset = node.cached_rng.choices(timezone_buckets, weights=weights)[0]
 
         # Set initial online status
         initial_status = node.behavior_profile.is_online(0, node)

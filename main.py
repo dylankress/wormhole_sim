@@ -53,6 +53,8 @@ def main():
     uploader = FileUploader(file_rng, config, nodes)
     all_uploaded_files = []
 
+    connected_count = sum(1 for n in nodes if n.online and n.has_joined)
+
     for _ in range(config.total_ticks):
         current_tick = clock.current()
 
@@ -65,28 +67,31 @@ def main():
 
         for node in nodes:
             node.online = node.behavior_profile.is_online(current_tick, node)
+
+            # Ensure node joins before affecting connected count
+            if not node.has_joined and node.online:
+                node.attempt_join(bootstrap_server, current_tick)
+                node.last_bootstrap_tick = current_tick
+
             came_online = node.online and not node.was_online_last_tick
             went_offline = not node.online and node.was_online_last_tick
 
-            if came_online:
-                #print(f"[JOIN EVENT] {node.id} online at tick {current_tick}, joined={node.has_joined}, peers={len(node.known_peers)}")
-                if not node.has_joined:
+            if came_online and node.has_joined:
+                connected_count += 1
+            elif went_offline and node.has_joined:
+                connected_count -= 1
+
+            # Rebootstrap logic
+            if node.has_joined and node.online and len(node.known_peers) < 2:
+                cooldown = config.rebootstrap_cooldown_ticks
+                last = node.last_bootstrap_tick or -cooldown
+                if current_tick - last >= cooldown:
                     node.attempt_join(bootstrap_server, current_tick)
                     node.last_bootstrap_tick = current_tick
-                elif len(node.known_peers) < 2:
-                    cooldown = config.rebootstrap_cooldown_ticks
-                    last = node.last_bootstrap_tick or -cooldown
-                    if current_tick - last >= cooldown:
-                        node.attempt_join(bootstrap_server, current_tick)
-                        node.last_bootstrap_tick = current_tick
-
-            #if went_offline:
-            #    print(f"[OFFLINE EVENT] {node.id} went offline at tick {current_tick}")
 
             node.was_online_last_tick = node.online
 
-        count_connected = sum(1 for n in nodes if n.online and n.has_joined)
-        connected_counts.append((current_tick, count_connected))
+        connected_counts.append((current_tick, connected_count))
 
         new_files = uploader.tick(current_tick)
         for f in new_files:
@@ -99,7 +104,8 @@ def main():
         writer = csv.writer(f)
         writer.writerow(["tick", "connected_nodes"])
         for tick, count in connected_counts:
-            writer.writerow([tick, count])
+            if tick % config.log_interval == 0:
+                writer.writerow([tick, count])
 
     # Load the logged data
     df = pd.read_csv("logs/connected_counts.csv")

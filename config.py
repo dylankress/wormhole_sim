@@ -1,5 +1,6 @@
 import random
 import hashlib
+import math
 
 class SimulationConfig:
     def __init__(self, seed: int):
@@ -18,6 +19,8 @@ class SimulationConfig:
         self.join_announcement_size_kb = 2
 
         self.rebootstrap_cooldown_ticks = 1000
+
+        self.log_interval = 10
 
         # Estimated average online uptime for each profile
         profile_uptime_estimates = {
@@ -56,9 +59,19 @@ class SimulationConfig:
 
         self.behavior_distribution = distribution
 
+        self.daylight_curve = self._generate_daylight_curve()
+
 
     def child_rng(self, namespace: str):
         full_seed = f"{self.seed}_{namespace}".encode()
         digest = hashlib.sha256(full_seed).digest()
         int_seed = int.from_bytes(digest[:4], byteorder="big")
         return random.Random(int_seed)
+    
+    def _generate_daylight_curve(self):
+        curve = []
+        for t in range(86400):  # One value per second in a 24-hour cycle
+            # Simulates higher online probability around noon, lower at night
+            daylight = 0.5 + 0.5 * math.sin(2 * math.pi * (t - 6 * 3600) / 86400)
+            curve.append(daylight)
+        return curve
