@@ -1,6 +1,7 @@
 class SimNode:
-    def __init__(self, node_id: str, upload_speed_mb_s: int, download_speed_mb_s: int, total_space_gb: int, is_new_user: bool, config):
+    def __init__(self, node_id: str, upload_speed_mb_s: int, download_speed_mb_s: int, total_space_gb: int, is_new_user: bool, config, nal):
         self.id = node_id
+        self.nal = nal
 
         self.upload_speed_mb_s = upload_speed_mb_s
         self.download_speed_mb_s = download_speed_mb_s
@@ -38,7 +39,7 @@ class SimNode:
                 f"free={self.free_space_gb}GB "
                 f"blackout={self.force_offline_until is not None}>")
     
-    def attempt_join(self, bootstrap_server, current_tick):
+    def attempt_join(self, current_tick):
         # Simulate announcement delay
         announce_payload_kb = self.config.join_announcement_size_kb
         upload_speed_kbps = self.upload_speed_mb_s * 1024
@@ -50,11 +51,16 @@ class SimNode:
 
         simulated_completion_tick = current_tick + total_delay
 
-        known_peers = bootstrap_server.register_node(self, current_tick)
+        # Announce self to network
+        capabilities = {
+            "upload_speed": self.upload_speed_mb_s,
+            "download_speed": self.download_speed_mb_s,
+            "storage_gb": self.total_space_gb,
+        }
+        known_peers = self.nal.announce_self(self.id, port=5200, capabilities=capabilities)
+
         self.join_tick = current_tick
         self.known_peers.update(known_peers)
         self.has_joined = True
 
-        #if current_tick > 0:
-            #print(f"🛰 Tick {current_tick}: node {self.id} joined the network")
-            #print(f"Tick {current_tick:.2f}: node {self.id} is now online with {len(self.known_peers)} known peers")
+        print(f"[JOIN] {self.id} joined with {len(known_peers)} peers at tick {current_tick}")

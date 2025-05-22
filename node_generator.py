@@ -1,7 +1,7 @@
 from sim_node import SimNode
 from node_behavior import generate_behavior_profile
 
-def generate_nodes(rng, count, config):
+def generate_nodes(rng, count, config, nal):
     nodes = []
     for i in range(count):
         node_id = f"node_{i}"
@@ -16,7 +16,8 @@ def generate_nodes(rng, count, config):
             download_speed_mb_s=download_speed,
             total_space_gb=total_space,
             is_new_user=is_new_user,
-            config=config
+            config=config,
+            nal=nal
         )
 
         # Assign behavior profile (deterministic based on seed)

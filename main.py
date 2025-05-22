@@ -10,8 +10,8 @@ from config import SimulationConfig
 from sim_clock import SimClock
 from file_uploader import FileUploader
 from node_generator import generate_nodes
-from bootstrap_server import BootstrapServer
 from blackout_manager import BlackoutManager
+from network.memory_backend import InMemoryNetwork
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Run Wormhole simulation.")
@@ -34,23 +34,22 @@ def main():
     connected_counts = []
 
     config = SimulationConfig(seed=seed)
+    nal = InMemoryNetwork(seed=seed)
     clock = SimClock()
 
     node_rng = config.child_rng("nodes")
-    nodes = generate_nodes(node_rng, config.total_nodes, config)
+    nodes = generate_nodes(node_rng, config.total_nodes, config, nal)
     
     blackout_manager = None
     if args.blackout:
         blackout_manager = BlackoutManager(config, nodes)
     
-    bootstrap_server = BootstrapServer(config)
-
     # Set last tick status for all nodes
     for node in nodes:
         node.was_online_last_tick = False
 
     file_rng = config.child_rng("file")
-    uploader = FileUploader(file_rng, config, nodes)
+    uploader = FileUploader(file_rng, config, nodes, nal)
     all_uploaded_files = []
 
     connected_count = sum(1 for n in nodes if n.online and n.has_joined)
@@ -70,7 +69,7 @@ def main():
 
             # Ensure node joins before affecting connected count
             if not node.has_joined and node.online:
-                node.attempt_join(bootstrap_server, current_tick)
+                node.attempt_join(current_tick)
                 node.last_bootstrap_tick = current_tick
 
             came_online = node.online and not node.was_online_last_tick
@@ -86,7 +85,7 @@ def main():
                 cooldown = config.rebootstrap_cooldown_ticks
                 last = node.last_bootstrap_tick or -cooldown
                 if current_tick - last >= cooldown:
-                    node.attempt_join(bootstrap_server, current_tick)
+                    node.attempt_join(current_tick)
                     node.last_bootstrap_tick = current_tick
 
             node.was_online_last_tick = node.online

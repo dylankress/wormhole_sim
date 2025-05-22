@@ -14,6 +14,7 @@ class SimulationConfig:
         self.file_upload_rate = 0.4
         self.max_files_per_tick = 3
         self.disk_write_speed_mb_s = 200
+        self.chunk_size_mb = 10
 
         self.bootstrap_peer_sample_size = 5
         self.join_announcement_size_kb = 2
