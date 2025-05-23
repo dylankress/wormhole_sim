@@ -18,7 +18,7 @@ class SimNode:
         self.online = False
         self.known_peers = set()
 
-        max_download_speed = 250  # or derive from actual list if needed
+        max_download_speed = 500  # or derive from actual list if needed
         normalized_download = self.download_speed_mb_s / max_download_speed
         normalized_space = self.free_space_gb / self.total_space_gb
 
