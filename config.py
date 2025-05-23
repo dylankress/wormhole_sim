@@ -32,6 +32,8 @@ class SimulationConfig:
             "erratic":       0.10
         }
 
+        self.profile_uptime_estimates = profile_uptime_estimates
+
         # Sort profiles by how "available" they are
         sorted_profiles = sorted(profile_uptime_estimates.items(), key=lambda x: -x[1])
 

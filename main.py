@@ -65,7 +65,7 @@ def main():
             blackout_manager.apply_blackout(current_tick)
 
         for node in nodes:
-            node.online = node.behavior_profile.is_online(current_tick, node)
+            node.online = node.behavior_profile_instance.is_online(current_tick, node)
 
             # Ensure node joins before affecting connected count
             if not node.has_joined and node.online:

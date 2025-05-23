@@ -1,11 +1,15 @@
 class SimNode:
-    def __init__(self, node_id: str, upload_speed_mb_s: int, download_speed_mb_s: int, total_space_gb: int, is_new_user: bool, config, nal):
+    def __init__(self, node_id: str, upload_speed_mb_s: int, download_speed_mb_s: int, total_space_gb: int, is_new_user: bool, behavior_profile: str, config, nal):
+        
+        self.config = config
         self.cached_rng = config.child_rng(f"node_rng_{node_id}")
         self.id = node_id
         self.nal = nal
 
         self.upload_speed_mb_s = upload_speed_mb_s
         self.download_speed_mb_s = download_speed_mb_s
+
+        self.behavior_profile = behavior_profile
 
         self.free_space_gb = total_space_gb
         self.total_space_gb = total_space_gb
@@ -14,8 +18,20 @@ class SimNode:
         self.online = False
         self.known_peers = set()
 
-        self.score = int(self.cached_rng.gauss(50, 15))
-        self.score = max(1, min(100, self.score))
+        max_download_speed = 250  # or derive from actual list if needed
+        normalized_download = self.download_speed_mb_s / max_download_speed
+        normalized_space = self.free_space_gb / self.total_space_gb
+
+        # Uptime from config
+        uptime = self.config.profile_uptime_estimates.get(self.behavior_profile, 0.5)
+
+        # Composite score
+        self.score = round(
+            0.5 * normalized_download +
+            0.3 * normalized_space +
+            0.2 * uptime,
+            2
+        )
 
         self.join_tick = None
         self.hosted_chunks = set()
@@ -27,8 +43,6 @@ class SimNode:
 
         self.auth_secret = "default"
         self.password_seed = "default"
-
-        self.config = config
         
         self.timezone_offset = None  # Assigned in node_generator
 
