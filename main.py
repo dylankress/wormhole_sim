@@ -100,7 +100,7 @@ def main():
 
         clock.advance()
 
-    uploader.print_summary()
+    uploader.print_summary(clock.tick)
     
     os.makedirs("logs", exist_ok=True)
     with open("logs/connected_counts.csv", "w", newline="") as f:

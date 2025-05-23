@@ -1,5 +1,6 @@
 class SimNode:
     def __init__(self, node_id: str, upload_speed_mb_s: int, download_speed_mb_s: int, total_space_gb: int, is_new_user: bool, config, nal):
+        self.cached_rng = config.child_rng(f"node_rng_{node_id}")
         self.id = node_id
         self.nal = nal
 
@@ -13,6 +14,9 @@ class SimNode:
         self.online = False
         self.known_peers = set()
 
+        self.score = int(self.cached_rng.gauss(50, 15))
+        self.score = max(1, min(100, self.score))
+
         self.join_tick = None
         self.hosted_chunks = set()
         self.has_joined = False
@@ -25,11 +29,12 @@ class SimNode:
         self.password_seed = "default"
 
         self.config = config
-        self.cached_rng = config.child_rng(f"node_rng_{node_id}")
         
         self.timezone_offset = None  # Assigned in node_generator
 
         self.files_uploaded = []
+
+        self.round_robin_index = 0
 
     def __repr__(self):
         return (f"<SimNode id={self.id} "

@@ -29,14 +29,17 @@ class InMemoryNetwork(
         self.last_tick = -1
 
     # --- PeerDiscoveryClient ---
-    def announce_self(self, peer_id: str, port: int, capabilities: dict) -> list[str]:
+    def announce_self(self, peer_id: str, port: int, capabilities: dict) -> list:
         self.peers[peer_id] = {
             "port": port,
             "capabilities": capabilities,
         }
-        known_peers = sorted([pid for pid in self.peers if pid != peer_id])
-        self.rng.shuffle(known_peers)
-        return known_peers[:5]  # deterministic sample size
+        peer_ids = sorted([pid for pid in self.peers if pid != peer_id])
+        self.rng.shuffle(peer_ids)
+        selected_ids = peer_ids[:10]
+
+        # ✅ Return full node objects
+        return [self.peer_nodes[pid] for pid in selected_ids if pid in self.peer_nodes]
 
     def fetch_peer_list(self, peer_id: str) -> list[str]:
         known_peers = sorted([pid for pid in self.peers if pid != peer_id])

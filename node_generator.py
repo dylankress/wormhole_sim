@@ -7,13 +7,13 @@ def generate_nodes(rng, count, config, nal):
         node_id = f"node_{i}"
 
         upload_speed = rng.choices(
-            population=[0.1, 0.5, 1, 5, 10, 25, 50, 100, 250],
-            weights=[2, 4, 10, 20, 25, 15, 10, 8, 6],
+            population=[0.1, 0.5, 1, 5, 10, 25, 50, 100],
+            weights=   [5,   8,   20, 30, 20, 10, 5, 2],  # Steep drop-off at 25+
         )[0]
 
         download_speed = rng.choices(
-            population=[0.1, 0.5, 1, 5, 10, 25, 50, 100, 250],
-            weights=[2, 4, 10, 20, 25, 15, 10, 8, 6],
+            population=[0.5, 1, 5, 10, 25, 50, 100, 250, 500],
+            weights=   [2,   5, 10, 20, 25, 20, 10, 6, 2],  # Favor 25–100 Mbps
         )[0]
         
         total_space = rng.randint(10, 100)  # GB
