@@ -17,12 +17,16 @@ class InMemoryNetwork(
     ChunkCleanupClient,
     PeerGossipAgent
 ):
-    def __init__(self, seed: int = 42):
+    def __init__(self, seed: int = 42, config=None):
         self.rng = random.Random(seed)
+        self.config = config or {}
         self.peers = {}  # peer_id -> metadata dict
         self.peer_chunks = defaultdict(dict)  # peer_id -> {chunk_id: bytes}
         self.manifests = defaultdict(dict)  # file_id -> manifest bytes
         self.peer_scores = {}  # peer_id -> float
+        self.uploads_this_tick = {}       # peer_id → chunk count this tick
+        self.peer_nodes = {}              # peer_id → SimNode reference
+        self.last_tick = -1
 
     # --- PeerDiscoveryClient ---
     def announce_self(self, peer_id: str, port: int, capabilities: dict) -> list[str]:
@@ -43,9 +47,9 @@ class InMemoryNetwork(
         self.peer_scores[peer_id] = score
 
     # --- ChunkTransferClient ---
-    def upload_chunk(self, chunk_id: str, chunk_data: bytes, target_peer: str) -> bool:
+    def upload_chunk(self, chunk_id: str, chunk_data: bytes, target_peer: str, uploader_id: str) -> bool:
         self.peer_chunks[target_peer][chunk_id] = chunk_data
-        print(f"[NAL] Uploaded {chunk_id} to {target_peer}")
+        print(f"[NAL] Uploaded {chunk_id} to {target_peer} from {uploader_id}")
         return True
 
     def download_chunk(self, chunk_id: str, source_peer: str) -> bytes:
@@ -89,3 +93,8 @@ class InMemoryNetwork(
             {"peer_id": pid, "score": self.peer_scores.get(pid, 0.0)}
             for pid in sorted(self.peers.keys())
         ]
+
+    def register_peer(self, peer_id: str, node) -> None:
+        self.peer_nodes[peer_id] = node
+        if peer_id not in self.peer_chunks:
+            self.peer_chunks[peer_id] = {}

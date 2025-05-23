@@ -34,7 +34,7 @@ def main():
     connected_counts = []
 
     config = SimulationConfig(seed=seed)
-    nal = InMemoryNetwork(seed=seed)
+    nal = InMemoryNetwork(seed=seed, config=config)
     clock = SimClock()
 
     node_rng = config.child_rng("nodes")
@@ -92,12 +92,16 @@ def main():
 
         connected_counts.append((current_tick, connected_count))
 
+        nal.config.current_tick = current_tick
+        
         new_files = uploader.tick(current_tick)
         for f in new_files:
             all_uploaded_files.append(f)
 
         clock.advance()
 
+    uploader.print_summary()
+    
     os.makedirs("logs", exist_ok=True)
     with open("logs/connected_counts.csv", "w", newline="") as f:
         writer = csv.writer(f)

@@ -5,10 +5,19 @@ def generate_nodes(rng, count, config, nal):
     nodes = []
     for i in range(count):
         node_id = f"node_{i}"
-        upload_speed = rng.randint(1, 5)        # MB/s
-        download_speed = rng.randint(2, 8)      # MB/s
-        total_space = rng.randint(10, 100)      # GB
-        is_new_user = rng.random() < 0.7        # 70% new users
+
+        upload_speed = rng.choices(
+            population=[0.1, 0.5, 1, 5, 10, 25, 50, 100, 250],
+            weights=[2, 4, 10, 20, 25, 15, 10, 8, 6],
+        )[0]
+
+        download_speed = rng.choices(
+            population=[0.1, 0.5, 1, 5, 10, 25, 50, 100, 250],
+            weights=[2, 4, 10, 20, 25, 15, 10, 8, 6],
+        )[0]
+        
+        total_space = rng.randint(10, 100)  # GB
+        is_new_user = rng.random() < 0.7    # 70% new users
 
         node = SimNode(
             node_id=node_id,
@@ -29,10 +38,6 @@ def generate_nodes(rng, count, config, nal):
         if node.behavior_profile is None:
             raise ValueError(f"Behavior profile generation failed for {node.id} with type '{profile_type}'")
 
-        # Assign timezone offset (in ticks, 3 hour buckets)
-        timezone_buckets = [0, 10800, 21600, 32400, 43200, 54000, 64800, 75600]
-        tz_rng = config.child_rng(f"timezone_offset_{node_id}")
-        
         # Assign timezone offset (in ticks, weighted by estimated global internet use)
         timezone_buckets = [
             0,     # UTC
@@ -45,19 +50,19 @@ def generate_nodes(rng, count, config, nal):
             75600  # UTC+21
         ]
 
-        # Approximate weightings for global population with internet access
-        weights = [
-            0.12,  # UTC      (Europe, North Africa)
-            0.08,  # UTC+3    (East Africa, Middle East)
-            0.20,  # UTC+6    (India, Bangladesh, Central Asia)
-            0.25,  # UTC+9    (China, Japan, Korea)
-            0.10,  # UTC+12   (Pacific + some Oceania)
-            0.10,  # UTC+15   (Australia east coast + oceanic)
-            0.10,  # UTC+18   (mostly sparse but catch-all)
-            0.05   # UTC+21   (extremely sparse)
+        tz_weights = [
+            0.12,  # UTC
+            0.08,  # UTC+3
+            0.20,  # UTC+6
+            0.25,  # UTC+9
+            0.10,  # UTC+12
+            0.10,  # UTC+15
+            0.10,  # UTC+18
+            0.05   # UTC+21
         ]
 
-        node.timezone_offset = node.cached_rng.choices(timezone_buckets, weights=weights)[0]
+        tz_rng = config.child_rng(f"timezone_offset_{node_id}")
+        node.timezone_offset = tz_rng.choices(timezone_buckets, weights=tz_weights)[0]
 
         # Set initial online status
         initial_status = node.behavior_profile.is_online(0, node)

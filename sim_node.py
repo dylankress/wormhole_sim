@@ -40,7 +40,8 @@ class SimNode:
                 f"blackout={self.force_offline_until is not None}>")
     
     def attempt_join(self, current_tick):
-        # Simulate announcement delay
+        self.nal.register_peer(self.id, self)
+
         announce_payload_kb = self.config.join_announcement_size_kb
         upload_speed_kbps = self.upload_speed_mb_s * 1024
         delay_ticks = announce_payload_kb / upload_speed_kbps
@@ -48,8 +49,6 @@ class SimNode:
         rng = self.cached_rng
         jitter = rng.uniform(0, 0.25)
         total_delay = delay_ticks + jitter
-
-        simulated_completion_tick = current_tick + total_delay
 
         # Announce self to network
         capabilities = {
@@ -64,3 +63,4 @@ class SimNode:
         self.has_joined = True
 
         print(f"[JOIN] {self.id} joined with {len(known_peers)} peers at tick {current_tick}")
+
