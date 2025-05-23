@@ -1,7 +1,7 @@
 from import_files import receive_files
 
 class FileUploader:
-    def __init__(self, rng, config, nodes, nal):
+    def __init__(self, rng, config, nodes, nal, reverse_index):
         self.rng = rng
         self.config = config
         self.nodes = nodes
@@ -9,6 +9,7 @@ class FileUploader:
         self.pending_writes = []
         self.pending_chunks = []
         self.nal = nal
+        self.reverse_index = reverse_index
 
         self.total_attempts = 0
         self.total_successes = 0
@@ -20,7 +21,7 @@ class FileUploader:
         self.replicated_files = 0
         self.replication_timers = {}
         self.pending_replicas = {}
-        self.disk_full_skips = 0  # ✅ NEW
+        self.disk_full_skips = 0
 
     def get_next_online_high_score_peer(self, uploader):
         online_peers = [p for p in uploader.known_peers if p.online]
@@ -43,7 +44,7 @@ class FileUploader:
                 return []
 
             chosen_node = self.rng.choice(online_nodes)
-            assert chosen_node.online, f"[ERROR] Upload initiated by offline node: {chosen_node.id}"
+            assert chosen_node.online
 
             files = receive_files(self.rng, self.next_file_index, num_files, chosen_node)
             self.next_file_index += num_files
@@ -59,8 +60,6 @@ class FileUploader:
                 "uploader": chosen_node,
                 "ready_at": current_tick + ticks_needed
             })
-
-            print(f"[WRITE] Node {chosen_node.id} uploading {num_files} file(s), ready @ tick {current_tick + ticks_needed}")
 
         ready_files = []
         for batch in self.pending_writes[:]:
@@ -80,12 +79,21 @@ class FileUploader:
                     for i in range(total_chunks):
                         chunk_id = f"{file.file_name}_chunk_{i}"
                         chunk_data = f"chunkdata:{chunk_id}".encode("utf-8")
-                        target_node = self.get_next_online_high_score_peer(uploader)
-                        if not target_node:
-                            print(f"[SKIPPED] No online known peers for uploader {uploader.id}")
-                            continue
+                        target_node = None
+                        peer_pool = sorted(
+                            [p for p in uploader.known_peers if p.online],
+                            key=lambda p: (-p.score, p.id)
+                        )
 
-                        if target_node.free_space_gb < (chunk_size_mb / 1024):
+                        target_node = None
+                        for _ in range(len(peer_pool)):
+                            candidate = peer_pool[uploader.round_robin_index % len(peer_pool)]
+                            uploader.round_robin_index += 1
+                            if candidate.free_space_gb >= (chunk_size_mb / 1024):
+                                target_node = candidate
+                                break
+
+                        if not target_node:
                             self.disk_full_skips += 1
                             continue
 
@@ -110,7 +118,6 @@ class FileUploader:
 
             self.total_attempts += 1
 
-            # Check if target still has space
             if job["target"].free_space_gb < (self.config.chunk_size_mb / 1024):
                 self.disk_full_skips += 1
                 continue
@@ -126,7 +133,11 @@ class FileUploader:
                 self.total_successes += 1
                 job["target"].hosted_chunks.add(job["chunk_id"])
                 job["target"].free_space_gb -= (self.config.chunk_size_mb / 1024)
-                print(f"[UPLOAD] {job['file_name']} → {job['target'].id} ({job['chunk_id']})")
+
+                base_chunk_id = job["chunk_id"]
+                if "_replica_" in base_chunk_id:
+                    base_chunk_id = base_chunk_id.split("_replica_")[0]
+                self.reverse_index.setdefault(base_chunk_id, set()).add(job["target"].id)
 
                 if job["replication_origin"] == "uploader":
                     host_node = job["target"]
@@ -163,11 +174,13 @@ class FileUploader:
                         if self.pending_replicas[job["file_name"]] == 0:
                             self.replicated_files += 1
                             self.replication_timers[job["file_name"]][1] = current_tick
+                            for node in self.nodes:
+                                if any(f.file_name == job["file_name"] for f in node.files_uploaded):
+                                    node.replication_status[job["file_name"]] = "replicated"
 
                 if job["file_name"] in self.pending_file_uploads:
                     self.pending_file_uploads[job["file_name"]] -= 1
                     if self.pending_file_uploads[job["file_name"]] <= 0:
-                        self.total_files_successful += 1
                         del self.pending_file_uploads[job["file_name"]]
                         self.replication_timers[job["file_name"]] = [current_tick, None]
                         self.pending_replicas[job["file_name"]] = sum(
@@ -185,19 +198,20 @@ class FileUploader:
 
     def print_summary(self, total_ticks):
         total_gb = self.total_data_uploaded_mb / 1024
-        avg_file_size_gb = (total_gb / self.total_files_successful) if self.total_files_successful else 0
+        completed_files = set(self.replication_timers.keys()) - set(self.pending_file_uploads.keys())
+        completed_count = len([f for f in completed_files if self.replication_timers[f][0] is not None])
+        avg_file_size_gb = (total_gb / completed_count) if completed_count else 0
         sim_hours = total_ticks / 3600
 
         print(f"\n[SUMMARY]")
         print(f"  Simulation time  : {sim_hours:.2f} hours")
         print(f"  Files attempted  : {self.total_files_attempted}")
-        print(f"  Files uploaded   : {self.total_files_successful}")
-        print(f"  Success rate     : {100 * self.total_files_successful / max(1, self.total_files_attempted):.2f}%")
+        print(f"  Files uploaded   : {completed_count}")
+        print(f"  Success rate     : {100 * completed_count / max(1, self.total_files_attempted):.2f}%")
         print(f"  Data uploaded    : {total_gb:.2f} GB")
         print(f"  Avg file size    : {avg_file_size_gb:.2f} GB")
         print(f"  Disk full skips  : {self.disk_full_skips}")
 
-        # ✅ FIXED replication summary logic
         pending_replication_files = {
             fname for fname, (start, end) in self.replication_timers.items()
             if start is not None and end is None and fname not in self.pending_file_uploads
@@ -216,7 +230,6 @@ class FileUploader:
         print(f"  Pending files    : {pending}")
         print(f"  Success rate     : {replication_pct:.2f}%")
         print(f"  Avg replication  : {avg_rep_minutes:.2f} min")
-
 
         print(f"\n[HOSTED CHUNKS PER NODE]")
         sorted_nodes = sorted(

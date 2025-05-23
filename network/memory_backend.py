@@ -34,17 +34,30 @@ class InMemoryNetwork(
             "port": port,
             "capabilities": capabilities,
         }
-        peer_ids = sorted([pid for pid in self.peers if pid != peer_id])
-        self.rng.shuffle(peer_ids)
-        selected_ids = peer_ids[:10]
 
-        # ✅ Return full node objects
-        return [self.peer_nodes[pid] for pid in selected_ids if pid in self.peer_nodes]
+        candidates = [
+            (pid, self.peer_nodes[pid])
+            for pid in self.peers
+            if pid != peer_id and pid in self.peer_nodes and self.peer_nodes[pid].online
+        ]
+
+        # Sort by score descending, then randomly shuffle top N
+        sorted_candidates = sorted(
+            candidates,
+            key=lambda x: (-self.peer_scores.get(x[0], 0.0), x[0])
+        )
+
+        top_peers = [node for _, node in sorted_candidates[:20]]
+        self.rng.shuffle(top_peers)
+        return top_peers
 
     def fetch_peer_list(self, peer_id: str) -> list[str]:
-        known_peers = sorted([pid for pid in self.peers if pid != peer_id])
-        self.rng.shuffle(known_peers)
-        return known_peers[:5]
+        online_peers = [
+            pid for pid in self.peers
+            if pid != peer_id and pid in self.peer_nodes and self.peer_nodes[pid].online
+        ]
+        self.rng.shuffle(online_peers)
+        return online_peers[:20]
 
     def refresh_peer_score(self, peer_id: str, score: float) -> None:
         self.peer_scores[peer_id] = score
@@ -52,7 +65,7 @@ class InMemoryNetwork(
     # --- ChunkTransferClient ---
     def upload_chunk(self, chunk_id: str, chunk_data: bytes, target_peer: str, uploader_id: str) -> bool:
         self.peer_chunks[target_peer][chunk_id] = chunk_data
-        print(f"[NAL] Uploaded {chunk_id} to {target_peer} from {uploader_id}")
+        #print(f"[NAL] Uploaded {chunk_id} to {target_peer} from {uploader_id}")
         return True
 
     def download_chunk(self, chunk_id: str, source_peer: str) -> bytes:

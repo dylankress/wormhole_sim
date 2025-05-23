@@ -22,6 +22,8 @@ class SimNode:
         normalized_download = self.download_speed_mb_s / max_download_speed
         normalized_space = self.free_space_gb / self.total_space_gb
 
+        self.replication_status = {}  # file_name → status string like "replicated"
+
         # Uptime from config
         uptime = self.config.profile_uptime_estimates.get(self.behavior_profile, 0.5)
 
@@ -47,6 +49,7 @@ class SimNode:
         self.timezone_offset = None  # Assigned in node_generator
 
         self.files_uploaded = []
+        self.replication_status = {}
 
         self.round_robin_index = 0
 

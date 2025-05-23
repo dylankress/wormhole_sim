@@ -23,6 +23,9 @@ class SimulationConfig:
 
         self.log_interval = 10
 
+        self.download_interval_min = 60
+        self.download_interval_max = 300
+
         # Estimated average online uptime for each profile
         profile_uptime_estimates = {
             "always_online": 1.00,
