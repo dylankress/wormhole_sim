@@ -110,3 +110,9 @@ class FileUploader:
         print(f"  Successes        : {self.total_successes}")
         print(f"  Success rate     : {100 * self.total_successes / max(1, self.total_attempts):.2f}%")
         print(f"  Data uploaded    : {total_gb:.2f} GB\n")
+
+        print("[HOSTED CHUNKS PER NODE]")
+        for node in self.nodes:
+            count = len(node.hosted_chunks)
+            if count > 0:
+                print(f"  {node.id} : {count} chunk(s)")
