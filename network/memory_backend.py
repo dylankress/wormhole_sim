@@ -29,6 +29,20 @@ class InMemoryNetwork(
         self.last_tick = -1
 
     # --- PeerDiscoveryClient ---
+
+    def get_eligible_upload_targets(self, exclude_ids=None, min_free_gb=0.01):
+        """
+        Return a list of online peers that have at least `min_free_gb` available.
+        Optionally excludes peers by ID (e.g., uploader).
+        """
+        exclude_ids = exclude_ids or set()
+        return [
+            node for node in self.peer_nodes.values()
+            if node.online
+            and node.free_space_gb >= min_free_gb
+            and node.id not in exclude_ids
+        ]
+
     def announce_self(self, peer_id: str, port: int, capabilities: dict) -> list:
         self.peers[peer_id] = {
             "port": port,

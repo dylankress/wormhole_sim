@@ -31,17 +31,13 @@ class FileDownloader:
 
     def tick(self, current_tick):
         still_pending = []
-        completed = {}
 
         for job in self.pending_downloads:
             if current_tick < job["ready_at"]:
                 still_pending.append(job)
                 continue
 
-            node_id = job["node_id"]
             file_name = job["file_name"]
-            completed.setdefault(node_id, set()).add(job["chunk_id"])
-
             if file_name in self.active_downloads:
                 self.active_downloads[file_name]["chunks_downloaded"] += 1
                 if self.active_downloads[file_name]["chunks_downloaded"] >= self.active_downloads[file_name]["chunks_total"]:
@@ -61,17 +57,12 @@ class FileDownloader:
             if current_tick < self.next_download_tick[node.id]:
                 continue
 
-            print(f"[DEBUG] Tick {current_tick}: evaluating downloads for {node.id}")
-
             eligible_files = [
                 f.file_name for f in node.files_uploaded
                 if getattr(node, "replication_status", {}).get(f.file_name) == "replicated"
             ]
 
-            print(f"[DEBUG] Node {node.id} has {len(eligible_files)} eligible replicated files: {eligible_files}")
-
             if not eligible_files:
-                print(f"[DEBUG] Skipping node {node.id}: no replicated files")
                 self.schedule_next(node.id, current_tick)
                 continue
 
@@ -80,18 +71,14 @@ class FileDownloader:
                 cid for cid in self.reverse_index
                 if cid.startswith(file_name + "_chunk_") and "replica" not in cid
             ]
+
             if not chunk_ids:
-                print(f"[DEBUG] Node {node.id} selected file {file_name}, but no base chunks found in reverse_index")
                 self.failed_downloads += 1
                 self.total_requests += 1
                 self.schedule_next(node.id, current_tick)
                 continue
 
-            print(f"[DEBUG] Node {node.id} is attempting to download file {file_name} with {len(chunk_ids)} chunks")
-
             chunks_downloaded = set()
-
-            # ✅ Track the download even before completion
             self.active_downloads[file_name] = {
                 "start_tick": current_tick,
                 "chunks_total": len(chunk_ids),
@@ -103,15 +90,14 @@ class FileDownloader:
                 if chunk_id in chunks_downloaded:
                     continue
 
-                hosts = [peer for peer in self.nodes if peer.id in self.reverse_index.get(chunk_id, []) and peer.online]
+                hosts = [
+                    peer for peer in self.nodes
+                    if peer.id in self.reverse_index.get(chunk_id, []) and peer.online
+                ]
                 if not hosts:
-                    print(f"[DEBUG] No online hosts found for chunk {chunk_id}")
-                    self.failed_downloads += 1
-                    self.total_requests += 1
-                    self.schedule_next(node.id, current_tick)
-                    break
+                    continue  # silently skip this chunk
 
-                source = sorted(hosts, key=lambda p: (-p.score, p.id))[0]
+                source = self.rng.choice(hosts)
                 speed = min(source.upload_speed_mb_s, node.download_speed_mb_s)
                 ticks = max(1, int(self.config.chunk_size_mb / speed))
 
@@ -124,15 +110,12 @@ class FileDownloader:
 
                 chunks_downloaded.add(chunk_id)
 
+            self.total_requests += 1
             if len(chunks_downloaded) == len(chunk_ids):
-                self.total_requests += 1
                 self.successful_downloads += 1
                 self.downloaded_files.setdefault(node.id, []).append(file_name)
-                print(f"[DOWNLOAD] {node.id} successfully started downloading {file_name}")
             else:
-                self.total_requests += 1
                 self.failed_downloads += 1
-                print(f"[DOWNLOAD FAILED] {node.id} could not fetch all chunks for {file_name}")
 
             self.schedule_next(node.id, current_tick)
 

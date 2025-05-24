@@ -15,19 +15,17 @@ class SimulationConfig:
         self.max_files_per_tick = 3
         self.disk_write_speed_mb_s = 200
         self.chunk_size_mb = 10
+        self.replication_factor = 10  # ✅ New: number of peers to upload each chunk to
 
         self.bootstrap_peer_sample_size = 5
         self.join_announcement_size_kb = 2
-
         self.rebootstrap_cooldown_ticks = 1000
-
         self.log_interval = 10
 
         self.download_interval_min = 60
         self.download_interval_max = 300
 
-        # Estimated average online uptime for each profile
-        profile_uptime_estimates = {
+        self.profile_uptime_estimates = {
             "always_online": 1.00,
             "mostly_online": 0.90,
             "balanced":      0.65,
@@ -35,11 +33,24 @@ class SimulationConfig:
             "erratic":       0.10
         }
 
-        self.profile_uptime_estimates = profile_uptime_estimates
+        self.behavior_distribution = self._build_behavior_distribution()
+        self.daylight_curve = self._generate_daylight_curve()
 
-        # Sort profiles by how "available" they are
-        sorted_profiles = sorted(profile_uptime_estimates.items(), key=lambda x: -x[1])
+    def child_rng(self, namespace: str):
+        full_seed = f"{self.seed}_{namespace}".encode()
+        digest = hashlib.sha256(full_seed).digest()
+        int_seed = int.from_bytes(digest[:4], byteorder="big")
+        return random.Random(int_seed)
 
+    def _generate_daylight_curve(self):
+        curve = []
+        for t in range(86400):  # One value per second in a 24-hour cycle
+            daylight = 0.5 + 0.5 * math.sin(2 * math.pi * (t - 6 * 3600) / 86400)
+            curve.append(daylight)
+        return curve
+
+    def _build_behavior_distribution(self):
+        sorted_profiles = sorted(self.profile_uptime_estimates.items(), key=lambda x: -x[1])
         remaining_nodes = self.total_nodes
         remaining_uptime_budget = self.target_active_ratio * self.total_nodes
 
@@ -59,25 +70,7 @@ class SimulationConfig:
             if remaining_nodes <= 0 or remaining_uptime_budget <= 0:
                 break
 
-        # Fill remainder with erratic if there's a gap
         if sum(distribution.values()) < 1.0:
             distribution["erratic"] = distribution.get("erratic", 0.0) + (1.0 - sum(distribution.values()))
 
-        self.behavior_distribution = distribution
-
-        self.daylight_curve = self._generate_daylight_curve()
-
-
-    def child_rng(self, namespace: str):
-        full_seed = f"{self.seed}_{namespace}".encode()
-        digest = hashlib.sha256(full_seed).digest()
-        int_seed = int.from_bytes(digest[:4], byteorder="big")
-        return random.Random(int_seed)
-    
-    def _generate_daylight_curve(self):
-        curve = []
-        for t in range(86400):  # One value per second in a 24-hour cycle
-            # Simulates higher online probability around noon, lower at night
-            daylight = 0.5 + 0.5 * math.sin(2 * math.pi * (t - 6 * 3600) / 86400)
-            curve.append(daylight)
-        return curve
+        return distribution

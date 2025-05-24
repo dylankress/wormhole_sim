@@ -16,7 +16,7 @@ def generate_nodes(rng, count, config, nal):
             weights=   [2,   5, 10, 20, 25, 20, 10, 6, 2],  # Favor 25–100 Mbps
         )[0]
         
-        total_space = rng.randint(1, 1000)  # GB
+        total_space = rng.randint(10, 1000)  # GB
         is_new_user = rng.random() < 0.7    # 70% new users
 
         # Assign behavior profile type

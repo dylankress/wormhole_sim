@@ -32,8 +32,6 @@ def main():
     seed = args.seed if args.seed is not None else random.randint(1, 1_000_000)
     save_seed(seed)
 
-    connected_counts = []
-
     config = SimulationConfig(seed=seed)
     nal = InMemoryNetwork(seed=seed, config=config)
     clock = SimClock()
@@ -41,13 +39,10 @@ def main():
     node_rng = config.child_rng("nodes")
     nodes = generate_nodes(node_rng, config.total_nodes, config, nal)
 
-    # ✅ Build shared reverse index
     reverse_index = {}
-
     file_rng = config.child_rng("file")
     uploader = FileUploader(file_rng, config, nodes, nal, reverse_index)
 
-    # ✅ Use uploader’s live reverse index
     file_downloader = FileDownloader(
         config=config,
         nodes=nodes,
@@ -56,14 +51,13 @@ def main():
         rng=config.child_rng("downloader_rng")
     )
 
-    blackout_manager = None
-    if args.blackout:
-        blackout_manager = BlackoutManager(config, nodes)
+    blackout_manager = BlackoutManager(config, nodes) if args.blackout else None
 
     for node in nodes:
         node.was_online_last_tick = False
 
     all_uploaded_files = []
+    connected_counts = []
     connected_count = sum(1 for n in nodes if n.online and n.has_joined)
 
     for _ in range(config.total_ticks):
@@ -92,26 +86,17 @@ def main():
             elif went_offline and node.has_joined:
                 connected_count -= 1
 
-            if node.has_joined and node.online and len(node.known_peers) < 2:
-                cooldown = config.rebootstrap_cooldown_ticks
-                last = node.last_bootstrap_tick or -cooldown
-                if current_tick - last >= cooldown:
-                    node.attempt_join(current_tick)
-                    node.last_bootstrap_tick = current_tick
-
             node.was_online_last_tick = node.online
 
         connected_counts.append((current_tick, connected_count))
         nal.config.current_tick = current_tick
 
         new_files = uploader.tick(current_tick)
-        for f in new_files:
-            all_uploaded_files.append(f)
+        all_uploaded_files.extend(new_files)
 
         clock.advance()
 
     uploader.print_summary(clock.tick)
-    print("\n[DOWNLOAD SUMMARY]")
     file_downloader.print_summary(clock.tick)
 
     os.makedirs("logs", exist_ok=True)
